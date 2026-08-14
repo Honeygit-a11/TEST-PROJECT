@@ -3,15 +3,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '@/data/products';
 
+export type ProductSize = Product['sizes'][number] | string;
+
 export interface CartItem {
   product: Product;
-  selectedSize: 'S' | 'M' | 'L' | 'XL';
+  selectedSize: ProductSize;
   quantity: number;
 }
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product, selectedSize: 'S' | 'M' | 'L' | 'XL') => void;
+  addToCart: (product: Product, selectedSize?: ProductSize) => void;
   removeFromCart: (productId: string, selectedSize: string) => void;
   updateQuantity: (productId: string, selectedSize: string, delta: number) => void;
   clearCart: () => void;
@@ -48,17 +50,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [cart]);
 
-  const addToCart = (product: Product, selectedSize: 'S' | 'M' | 'L' | 'XL') => {
+  const addToCart = (product: Product, selectedSize?: ProductSize) => {
+    const sizeToUse = selectedSize || product.sizes[0] || 'M';
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (item) => item.product.id === product.id && item.selectedSize === selectedSize
+        (item) => item.product.id === product.id && item.selectedSize === sizeToUse
       );
       if (existingIndex > -1) {
         const updated = [...prev];
         updated[existingIndex].quantity += 1;
         return updated;
       }
-      return [...prev, { product, selectedSize, quantity: 1 }];
+      return [...prev, { product, selectedSize: sizeToUse, quantity: 1 }];
     });
     setIsCartOpen(true);
   };
