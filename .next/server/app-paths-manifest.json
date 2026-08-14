@@ -1,9 +1,9 @@
 {
   "/page": "app/page.js",
   "/lookbook/page": "app/lookbook/page.js",
-  "/product/[id]/page": "app/product/[id]/page.js",
-  "/about/page": "app/about/page.js",
+  "/journal/page": "app/journal/page.js",
   "/collections/page": "app/collections/page.js",
   "/shop/page": "app/shop/page.js",
+  "/product/[id]/page": "app/product/[id]/page.js",
   "/bag/page": "app/bag/page.js"
 }
