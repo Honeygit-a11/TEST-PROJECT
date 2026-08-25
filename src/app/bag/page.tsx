@@ -6,15 +6,31 @@ import Link from 'next/link';
 import { Trash2, Plus, Minus, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 
+const SHIPPING_FLAT = 8;
+const FREE_SHIPPING_THRESHOLD = 120;
+
+const EMPTY_CUSTOMER = {
+  name: '',
+  email: '',
+  address: '',
+  city: '',
+  postalCode: '',
+  country: '',
+};
+
 export default function BagPage() {
   const { cart, removeFromCart, updateQuantity, subtotal, totalItems, clearCart } = useCart();
   const [promoCode, setPromoCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
   const [checkoutComplete, setCheckoutComplete] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [customer, setCustomer] = useState({ ...EMPTY_CUSTOMER });
+  const [submitting, setSubmitting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
 
-  const discount = discountApplied ? Math.round(subtotal * 0.1) : 0;
-  const shipping = subtotal > 200 || subtotal === 0 ? 0 : 20;
-  const grandTotal = subtotal - discount + shipping;
+  const discount = discountApplied ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
+  const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT;
+  const grandTotal = Math.round((subtotal - discount + shipping) * 100) / 100;
 
   const handleApplyPromo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,9 +41,41 @@ export default function BagPage() {
     }
   };
 
-  const handleCheckout = () => {
-    setCheckoutComplete(true);
-    clearCart();
+  const handleCustomerChange = (field: keyof typeof customer) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomer((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleCheckout = async () => {
+    setCheckoutError('');
+    if ((Object.keys(customer) as (keyof typeof customer)[]).some((k) => !customer[k].trim())) {
+      setCheckoutError('// ERROR: COMPLETE ALL SHIPPING FIELDS');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map((i) => ({
+            productId: i.product.id,
+            size: i.selectedSize,
+            quantity: i.quantity,
+          })),
+          customer,
+          ...(discountApplied ? { promoCode: promoCode.trim().toUpperCase() } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'CHECKOUT FAILED');
+      setOrderNumber(data.orderNumber);
+      setCheckoutComplete(true);
+      clearCart();
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message.toUpperCase() : '// CHECKOUT FAILED');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (checkoutComplete) {
@@ -43,7 +91,7 @@ export default function BagPage() {
         </div>
 
         <div className="font-mono text-xs bg-[var(--brand-yellow)] p-4 border-grid max-w-sm w-full">
-          ORDER ID: NEO-2026-ARCHIVE-8849<br />
+          ORDER ID: {orderNumber}<br />
           ESTIMATED DELIVERY: 2-4 BUSINESS DAYS
         </div>
 
@@ -169,6 +217,57 @@ export default function BagPage() {
                 )}
               </form>
 
+              {/* Shipping Details Form */}
+              <div className="space-y-2 border-t-grid pt-4">
+                <label className="font-mono text-xs font-bold text-[var(--brand-primary)] block">
+                  // SHIPPING DETAILS:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="FULL NAME"
+                    value={customer.name}
+                    onChange={handleCustomerChange('name')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none sm:col-span-1"
+                  />
+                  <input
+                    type="email"
+                    placeholder="EMAIL"
+                    value={customer.email}
+                    onChange={handleCustomerChange('email')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none sm:col-span-1"
+                  />
+                  <input
+                    type="text"
+                    placeholder="STREET ADDRESS"
+                    value={customer.address}
+                    onChange={handleCustomerChange('address')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none sm:col-span-2"
+                  />
+                  <input
+                    type="text"
+                    placeholder="CITY"
+                    value={customer.city}
+                    onChange={handleCustomerChange('city')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="POSTAL CODE"
+                    value={customer.postalCode}
+                    onChange={handleCustomerChange('postalCode')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="COUNTRY"
+                    value={customer.country}
+                    onChange={handleCustomerChange('country')}
+                    className="bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none sm:col-span-2"
+                  />
+                </div>
+              </div>
+
               {/* Cost Lines */}
               <div className="space-y-3 font-mono text-sm border-t-grid pt-4">
                 <div className="flex justify-between">
@@ -197,12 +296,18 @@ export default function BagPage() {
 
             {/* Checkout Action */}
             <div className="space-y-3">
+              {checkoutError && (
+                <div className="font-mono text-xs font-bold text-red-600 bg-red-50 border border-red-600 p-3">
+                  {checkoutError}
+                </div>
+              )}
               <button
                 onClick={handleCheckout}
-                className="btn-brutalist-yellow w-full py-5 text-xl font-headline flex items-center justify-center gap-3 tracking-wider"
+                disabled={submitting}
+                className="btn-brutalist-yellow w-full py-5 text-xl font-headline flex items-center justify-center gap-3 tracking-wider disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>COMPLETE ORDER — ${grandTotal}</span>
-                <ArrowRight className="w-6 h-6" />
+                <span>{submitting ? 'PROCESSING...' : `COMPLETE ORDER — $${grandTotal}`}</span>
+                {!submitting && <ArrowRight className="w-6 h-6" />}
               </button>
               <div className="font-mono text-[10px] text-center text-stone-500">
                 ENCRYPTED CHECKOUT PROTOCOL // SECURE SYSTEM

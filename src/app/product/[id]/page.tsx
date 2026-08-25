@@ -5,39 +5,81 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ShoppingBag, ShieldCheck, Truck, RefreshCw, Plus, Minus, Check } from 'lucide-react';
-import { PRODUCTS, Product } from '@/data/products';
+import { Product } from '@/data/products';
 import { useCart } from '@/context/CartContext';
 import { ProductCard } from '@/components/ProductCard';
 
 export default function ProductDetailPage() {
   const params = useParams();
   const productId = typeof params?.id === 'string' ? params.id : (Array.isArray(params?.id) ? params.id[0] : 'nx-001');
-  const product = PRODUCTS.find((p) => p.id === productId) || PRODUCTS[0];
 
-  const [selectedSize, setSelectedSize] = useState<string>(product.sizes[0] || 'M');
-  const [selectedImage, setSelectedImage] = useState<string>(product.image);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const [selectedSize, setSelectedSize] = useState<string>('M');
+  const [selectedImage, setSelectedImage] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [addedAnimation, setAddedAnimation] = useState<boolean>(false);
   const { addToCart } = useCart();
 
-  // Reset state when product changes (e.g. clicked on related product)
+  // Fetch product + related items from the API
   useEffect(() => {
-    setSelectedSize(product.sizes[0] || 'M');
-    setSelectedImage(product.image);
-    setQuantity(1);
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/products/${productId}`);
+        if (!res.ok) {
+          if (!cancelled) setProduct(null);
+          return;
+        }
+        const data: Product = await res.json();
+        if (cancelled) return;
+        setProduct(data);
+        setSelectedSize(data.sizes[0] || 'M');
+        setSelectedImage(data.image);
+        const allRes = await fetch('/api/products');
+        const all: Product[] = await allRes.json();
+        if (!cancelled) {
+          setRelatedProducts(all.filter((p) => p.id !== data.id).slice(0, 4));
+        }
+      } catch {
+        if (!cancelled) setProduct(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [product.id, product.image, product.sizes]);
-
-  // Find related products (excluding current product)
-  const relatedProducts = PRODUCTS.filter((p) => p.id !== product.id).slice(0, 4);
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   const handleAddToCart = () => {
+    if (!product) return;
     for (let i = 0; i < quantity; i++) {
       addToCart(product, selectedSize as any);
     }
     setAddedAnimation(true);
     setTimeout(() => setAddedAnimation(false), 1500);
   };
+
+  if (loading || !product) {
+    return (
+      <div className="w-full bg-[#FAF9F5] min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <span className="font-mono text-xs font-bold uppercase tracking-widest text-[#1B1C1A]">
+          {loading ? 'LOADING ARCHIVE ARTIFACT...' : '// ERROR 404 — ARTIFACT NOT FOUND'}
+        </span>
+        {!loading && (
+          <Link href="/shop" className="btn-brutalist text-sm px-6 py-3 uppercase tracking-wider">
+            RETURN TO CATALOG
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full bg-[#FAF9F5]">

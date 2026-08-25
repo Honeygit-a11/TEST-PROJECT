@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Plus, LayoutGrid, List } from 'lucide-react';
-import { PRODUCTS } from '@/data/products';
+import { Product } from '@/data/products';
 import { useCart } from '@/context/CartContext';
 import { ProductCard } from '@/components/ProductCard';
 
@@ -13,9 +13,27 @@ export default function ShopPage() {
   const [sortBy, setSortBy] = useState<'NEWEST' | 'LOW_HIGH' | 'HIGH_LOW'>('NEWEST');
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
   const [visibleCount, setVisibleCount] = useState<number>(8);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const { addToCart } = useCart();
 
-  let displayedProducts = [...PRODUCTS];
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setProducts(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  let displayedProducts = [...products];
 
   if (selectedCategory !== 'ALL') {
     if (selectedCategory === 'TOPS') {
@@ -120,7 +138,11 @@ export default function ShopPage() {
       </div>
 
       {/* 3. PRODUCT CATALOG DISPLAY */}
-      {viewMode === 'GRID' ? (
+      {loading ? (
+        <div className="p-16 text-center border-b border-[#1B1C1A] bg-[#FAF9F5] font-mono text-xs font-bold uppercase tracking-widest text-[#1B1C1A]">
+          LOADING ARCHIVE DATA...
+        </div>
+      ) : viewMode === 'GRID' ? (
         <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#FAF9F5] border-b border-[#1B1C1A]">
           {visibleProducts.map((product) => (
             <ProductCard key={product.id} product={product} />

@@ -1,18 +1,28 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
-import { PRODUCTS } from '@/data/products';
+import { PRODUCTS, Product } from '@/data/products';
 import { ProductCard } from '@/components/ProductCard';
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'T-SHIRTS' | 'OUTERWEAR' | 'ACCESSORIES' | 'PANTS'>('ALL');
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+
+  useEffect(() => {
+    fetch('/api/products')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setProducts(data);
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredProducts = selectedCategory === 'ALL'
-    ? PRODUCTS
-    : PRODUCTS.filter((p) => p.category === selectedCategory);
+    ? products
+    : products.filter((p) => p.category === selectedCategory);
 
   return (
     <div className="w-full">

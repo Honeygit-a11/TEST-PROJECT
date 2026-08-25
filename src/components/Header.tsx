@@ -146,7 +146,7 @@ export const Header: React.FC = () => {
 
           {/* ACCOUNT */}
           <Link
-            href="/about"
+            href="/account"
             className="hidden sm:inline-block text-[#1B1C1A] hover:text-[#FF4500] transition-colors py-1"
           >
             ACCOUNT
@@ -290,7 +290,7 @@ export const Header: React.FC = () => {
             </Link>
           ))}
           <Link
-            href="/about"
+            href="/account"
             onClick={() => setMobileMenuOpen(false)}
             className="font-headline text-2xl text-[#1B1C1A] hover:text-[#FF4500] transition-colors py-1"
           >
