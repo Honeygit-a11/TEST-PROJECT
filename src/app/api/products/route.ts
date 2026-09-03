@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
 
     if (category) filter.category = category.toUpperCase();
     if (featured === 'true') filter.featured = true;
-    if (search) filter.name = { $regex: search, $options: 'i' };
+    if (search) {
+      // Search across the fields the header search box exposes (name, sku, color)
+      const rx = { $regex: search, $options: 'i' };
+      filter.$or = [{ name: rx }, { sku: rx }, { color: rx }];
+    }
 
     const products = await ProductModel.find(filter).sort({ index: 1 }).lean();
     return NextResponse.json(products);

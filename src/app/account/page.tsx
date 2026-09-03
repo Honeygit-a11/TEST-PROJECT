@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { LogIn, UserPlus, LogOut, User, Loader2 } from 'lucide-react';
+import Image from 'next/image';
+import { LogIn, UserPlus, LogOut, User, Loader2, Package } from 'lucide-react';
 
 interface SessionUser {
   id: string;
@@ -11,11 +12,35 @@ interface SessionUser {
   role: string;
 }
 
+interface OrderView {
+  _id: string;
+  orderNumber: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  items: { name: string; image: string; size: string; price: number; quantity: number }[];
+}
+
 const EMPTY_FORM = {
   name: '',
   email: '',
   password: '',
 };
+
+// Status badge colours, kept within the account page's hardcoded-hex palette.
+const STATUS_STYLES: Record<string, string> = {
+  pending: 'bg-[#FCD400] text-[#1B1C1A]',
+  paid: 'bg-[#1B1C1A] text-white',
+  shipped: 'bg-[#FF4500] text-white',
+  delivered: 'bg-green-600 text-white',
+  cancelled: 'bg-stone-300 text-stone-600 line-through',
+};
+
+function formatOrderDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+}
 
 export default function AccountPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
