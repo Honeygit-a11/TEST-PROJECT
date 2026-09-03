@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidObjectId } from 'mongoose';
 import dbConnect from '@/lib/mongodb';
-import { OrderModel, ORDER_STATUSES } from '@/models/Order';
+import { OrderModel } from '@/models/Order';
 import { getSession, requireAdmin } from '@/lib/auth';
+import { validateBody } from '@/lib/validations/validate';
+import { updateOrderStatusSchema } from '@/lib/validations/order.schema';
 
 // Match an order by human-facing orderNumber, or by _id when the param is a valid ObjectId.
 function idQuery(id: string): { $or: Record<string, unknown>[] } {
@@ -20,7 +22,10 @@ export async function GET(
     const order = await OrderModel.findOne(idQuery(params.id)).lean();
 
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: { code: 'ORDER_NOT_FOUND', message: `Order ${params.id} not found` } },
+        { status: 404 }
+      );
     }
 
     // Only allow the owner or an admin to view full order details
@@ -41,11 +46,14 @@ export async function GET(
     return NextResponse.json(order);
   } catch (error) {
     console.error(`GET /api/orders/${params.id} failed:`, error);
-    return NextResponse.json({ error: 'Failed to fetch order' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch order' } },
+      { status: 500 }
+    );
   }
 }
 
-// Admin-only: update an order's status.
+// Admin-only: update an order's status with Zod validation.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -55,13 +63,10 @@ export async function PATCH(
     if (!auth.ok) return auth.response;
 
     const body = await req.json().catch(() => null);
-    const status = body?.status;
-    if (typeof status !== 'string' || !(ORDER_STATUSES as readonly string[]).includes(status)) {
-      return NextResponse.json(
-        { error: `status must be one of: ${ORDER_STATUSES.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const validation = validateBody(updateOrderStatusSchema, body);
+    if (!validation.success) return validation.response;
+
+    const { status } = validation.data;
 
     await dbConnect();
     const order = await OrderModel.findOneAndUpdate(
@@ -71,11 +76,17 @@ export async function PATCH(
     ).lean();
 
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: { code: 'ORDER_NOT_FOUND', message: `Order ${params.id} not found` } },
+        { status: 404 }
+      );
     }
     return NextResponse.json(order);
   } catch (error) {
     console.error(`PATCH /api/orders/${params.id} failed:`, error);
-    return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update order' } },
+      { status: 500 }
+    );
   }
 }

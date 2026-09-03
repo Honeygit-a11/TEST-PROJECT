@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { ProductModel } from '@/models/Product';
 import { requireAdmin } from '@/lib/auth';
+import { validateBody } from '@/lib/validations/validate';
+import { createProductSchema } from '@/lib/validations/product.schema';
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,45 +27,51 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(products);
   } catch (error) {
     console.error('GET /api/products failed:', error);
-    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch products' } },
+      { status: 500 }
+    );
   }
 }
 
-// Admin-only: create a product. Field-level validation is enforced by the Mongoose schema.
+// Admin-only: create a product with strict Zod schema validation.
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     const body = await req.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'A product body is required' }, { status: 400 });
-    }
+    const validation = validateBody(createProductSchema, body);
+    if (!validation.success) return validation.response;
 
     await dbConnect();
 
-    // Pre-check uniqueness so the client gets a clear 409 rather than a raw duplicate-key error.
-    const or: Record<string, unknown>[] = [];
-    if (typeof body.id === 'string') or.push({ id: body.id });
-    if (typeof body.sku === 'string') or.push({ sku: body.sku });
-    if (or.length) {
-      const clash = await ProductModel.findOne({ $or: or }).lean();
-      if (clash) {
-        return NextResponse.json({ error: 'A product with this id or sku already exists' }, { status: 409 });
-      }
+    // Pre-check uniqueness so the client gets a clear 409
+    const clash = await ProductModel.findOne({
+      $or: [{ id: validation.data.id }, { sku: validation.data.sku }],
+    }).lean();
+
+    if (clash) {
+      return NextResponse.json(
+        { error: { code: 'DUPLICATE_PRODUCT', message: 'A product with this id or sku already exists' } },
+        { status: 409 }
+      );
     }
 
-    const product = await ProductModel.create(body);
+    const product = await ProductModel.create(validation.data);
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
     const err = error as { name?: string; code?: number; message?: string };
-    if (err?.name === 'ValidationError') {
-      return NextResponse.json({ error: err.message ?? 'Invalid product data' }, { status: 400 });
-    }
     if (err?.code === 11000) {
-      return NextResponse.json({ error: 'A product with this id or sku already exists' }, { status: 409 });
+      return NextResponse.json(
+        { error: { code: 'DUPLICATE_PRODUCT', message: 'A product with this id or sku already exists' } },
+        { status: 409 }
+      );
     }
     console.error('POST /api/products failed:', error);
-    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create product' } },
+      { status: 500 }
+    );
   }
 }

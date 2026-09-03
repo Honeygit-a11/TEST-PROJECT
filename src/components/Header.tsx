@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X, ShoppingBag, Search, ArrowRight } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { PRODUCTS, Product } from '@/data/products';
+import type { Product } from '@/data/products';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
@@ -15,6 +15,7 @@ export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const navLinks = [
@@ -36,6 +37,7 @@ export const Header: React.FC = () => {
   useEffect(() => {
     setSearchOpen(false);
     setSearchQuery('');
+    setSearchResults([]);
   }, [pathname]);
 
   useEffect(() => {
@@ -48,24 +50,43 @@ export const Header: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const searchResults: Product[] = searchQuery.trim() === ''
-    ? []
-    : PRODUCTS.filter((p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.color.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 4);
+  // Debounced API-backed search query
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/products?q=${encodeURIComponent(query)}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: Product[]) => {
+          if (!cancelled) {
+            setSearchResults(Array.isArray(data) ? data.slice(0, 4) : []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResults([]);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchResults.length > 0) {
-      router.push(`/product/${searchResults[0].id}`);
-      setSearchOpen(false);
-    } else if (searchQuery.trim()) {
-      router.push(`/shop`);
-      setSearchOpen(false);
+    const query = searchQuery.trim();
+    if (query) {
+      router.push('/shop?q=' + encodeURIComponent(query));
+    } else {
+      router.push('/shop');
     }
+    setSearchOpen(false);
   };
 
   return (

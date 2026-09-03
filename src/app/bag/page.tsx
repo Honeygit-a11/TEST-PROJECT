@@ -66,8 +66,11 @@ export default function BagPage() {
           ...(discountApplied ? { promoCode: promoCode.trim().toUpperCase() } : {}),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'CHECKOUT FAILED');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = typeof data?.error === 'object' && data.error ? data.error.message : (data?.error || 'CHECKOUT FAILED');
+        throw new Error(msg);
+      }
       setOrderNumber(data.orderNumber);
       setCheckoutComplete(true);
       clearCart();

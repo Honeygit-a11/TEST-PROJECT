@@ -83,7 +83,13 @@ export type GuardResult =
 export async function requireUser(): Promise<GuardResult> {
   const session = await getSession();
   if (!session) {
-    return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      ),
+    };
   }
   return { ok: true, session };
 }
@@ -92,7 +98,13 @@ export async function requireAdmin(): Promise<GuardResult> {
   const result = await requireUser();
   if (!result.ok) return result;
   if (result.session.role !== 'admin') {
-    return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: { code: 'FORBIDDEN', message: 'Admin privileges required' } },
+        { status: 403 }
+      ),
+    };
   }
   return result;
 }

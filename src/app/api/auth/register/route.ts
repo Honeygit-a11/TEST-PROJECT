@@ -3,23 +3,29 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import { UserModel } from '@/models/User';
 import { signToken, setAuthCookie } from '@/lib/auth';
+import { applyRateLimit } from '@/lib/rate-limit';
+import { validateBody } from '@/lib/validations/validate';
+import { registerSchema } from '@/lib/validations/auth.schema';
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
+    // Rate limiting: 5 registration attempts per 60 seconds per IP
+    const rateLimitResponse = applyRateLimit(req, 'auth_register', { limit: 5, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await req.json().catch(() => null);
-    const { name, email, password } = body ?? {};
+    const validation = validateBody(registerSchema, body);
+    if (!validation.success) return validation.response;
 
-    if (!name || !email || !password || typeof password !== 'string' || password.length < 6) {
-      return NextResponse.json(
-        { error: 'name, email and a password of at least 6 characters are required' },
-        { status: 400 }
-      );
-    }
+    const { name, email, password } = validation.data;
 
+    await dbConnect();
     const existing = await UserModel.findOne({ email: email.toLowerCase() });
     if (existing) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
+      return NextResponse.json(
+        { error: { code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists' } },
+        { status: 409 }
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -38,6 +44,9 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     console.error('POST /api/auth/register failed:', error);
-    return NextResponse.json({ error: 'Registration failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Registration service encountered an error' } },
+      { status: 500 }
+    );
   }
 }

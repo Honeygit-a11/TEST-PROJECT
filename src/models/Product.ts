@@ -22,6 +22,7 @@ export interface ProductDoc {
     edition: string;
   };
   sizes: string[];
+  stock: number;
   inStock: boolean;
   featured?: boolean;
   createdAt: Date;
@@ -55,6 +56,7 @@ const productSchema = new Schema<ProductDoc>(
       edition: { type: String, required: true },
     },
     sizes: { type: [String], required: true },
+    stock: { type: Number, required: true, default: 25, min: 0 },
     inStock: { type: Boolean, default: true },
     featured: { type: Boolean, default: false },
   },

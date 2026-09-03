@@ -3,6 +3,8 @@ import dbConnect from '@/lib/mongodb';
 import { ProductModel } from '@/models/Product';
 import { requireAdmin } from '@/lib/auth';
 import { PRODUCTS } from '@/data/products';
+import { validateBody } from '@/lib/validations/validate';
+import { updateProductSchema } from '@/lib/validations/product.schema';
 
 export async function GET(
   req: NextRequest,
@@ -16,7 +18,10 @@ export async function GET(
       // Fallback to static data when DB has no entry yet
       const fallback = PRODUCTS.find((p) => p.id === params.id);
       if (!fallback) {
-        return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+        return NextResponse.json(
+          { error: { code: 'PRODUCT_NOT_FOUND', message: `Product ${params.id} not found` } },
+          { status: 404 }
+        );
       }
       return NextResponse.json(fallback);
     }
@@ -24,11 +29,14 @@ export async function GET(
     return NextResponse.json(product);
   } catch (error) {
     console.error(`GET /api/products/${params.id} failed:`, error);
-    return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch product' } },
+      { status: 500 }
+    );
   }
 }
 
-// Admin-only: partially update a product by its business id.
+// Admin-only: partially update a product by its business id with Zod validation.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -38,34 +46,38 @@ export async function PATCH(
     if (!auth.ok) return auth.response;
 
     const body = await req.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'An update body is required' }, { status: 400 });
-    }
-    // The business id and Mongo _id are immutable via PATCH.
-    delete body.id;
-    delete body._id;
+    const validation = validateBody(updateProductSchema, body);
+    if (!validation.success) return validation.response;
+
+    const updateData = { ...validation.data };
 
     await dbConnect();
     const product = await ProductModel.findOneAndUpdate(
       { id: params.id },
-      { $set: body },
+      { $set: updateData },
       { returnDocument: 'after', runValidators: true }
     ).lean();
 
     if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: { code: 'PRODUCT_NOT_FOUND', message: `Product ${params.id} not found` } },
+        { status: 404 }
+      );
     }
     return NextResponse.json(product);
   } catch (error) {
     const err = error as { name?: string; code?: number; message?: string };
-    if (err?.name === 'ValidationError') {
-      return NextResponse.json({ error: err.message ?? 'Invalid product data' }, { status: 400 });
-    }
     if (err?.code === 11000) {
-      return NextResponse.json({ error: 'That sku is already in use' }, { status: 409 });
+      return NextResponse.json(
+        { error: { code: 'DUPLICATE_SKU', message: 'That SKU is already in use by another product' } },
+        { status: 409 }
+      );
     }
     console.error(`PATCH /api/products/${params.id} failed:`, error);
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update product' } },
+      { status: 500 }
+    );
   }
 }
 
@@ -81,11 +93,17 @@ export async function DELETE(
     await dbConnect();
     const deleted = await ProductModel.findOneAndDelete({ id: params.id }).lean();
     if (!deleted) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: { code: 'PRODUCT_NOT_FOUND', message: `Product ${params.id} not found` } },
+        { status: 404 }
+      );
     }
     return NextResponse.json({ ok: true, id: params.id });
   } catch (error) {
     console.error(`DELETE /api/products/${params.id} failed:`, error);
-    return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to delete product' } },
+      { status: 500 }
+    );
   }
 }

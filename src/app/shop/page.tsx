@@ -1,14 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { Product } from '@/data/products';
 import { useCart } from '@/context/CartContext';
 import { ProductCard } from '@/components/ProductCard';
 
-export default function ShopPage() {
+function ShopContent() {
+  const searchParams = useSearchParams();
+  const query = searchParams.get('q') || '';
+
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'NEWEST' | 'LOW_HIGH' | 'HIGH_LOW'>('NEWEST');
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
@@ -19,19 +23,24 @@ export default function ShopPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/products')
+    setLoading(true);
+
+    const endpoint = query ? `/api/products?q=${encodeURIComponent(query)}` : '/api/products';
+
+    fetch(endpoint)
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setProducts(data);
+        if (!cancelled) setProducts(Array.isArray(data) ? data : []);
       })
       .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [query]);
 
   let displayedProducts = [...products];
 
@@ -59,18 +68,37 @@ export default function ShopPage() {
       <div className="p-6 sm:p-10 border-b border-[#1B1C1A] bg-[#EFEEEA] flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div className="max-w-2xl space-y-2">
           <span className="font-mono text-xs text-[#FF4500] font-bold uppercase tracking-widest block">
-            // PERMANENT ARCHIVE CATALOGUE
+            {query ? `// SEARCH RESULTS FOR "${query.toUpperCase()}"` : '// PERMANENT ARCHIVE CATALOGUE'}
           </span>
           <h1 className="font-headline text-5xl sm:text-7xl tracking-tight text-[#1B1C1A] leading-none">
-            SHOP COLLECTION.
+            {query ? 'SEARCH RESULTS.' : 'SHOP COLLECTION.'}
           </h1>
           <p className="font-body text-base sm:text-lg text-[#5D4038] leading-relaxed">
-            Exploring the intersection of raw utility, brutalist architecture, and underground streetwear. Drop #1 / Vol. 001 Archive.
+            {query ? (
+              <span>
+                Displaying archive artifacts matching your query.{' '}
+                <Link href="/shop" className="text-[#FF4500] underline font-bold">
+                  [CLEAR SEARCH]
+                </Link>
+              </span>
+            ) : (
+              'Exploring the intersection of raw utility, brutalist architecture, and underground streetwear. Drop #1 / Vol. 001 Archive.'
+            )}
           </p>
         </div>
 
-        <div className="font-mono text-xs bg-[#1B1C1A] text-white px-3 py-1.5 border border-[#1B1C1A] font-bold tracking-widest self-start md:self-end">
-          TOTAL ITEMS: [ {displayedProducts.length} ]
+        <div className="flex items-center gap-3 self-start md:self-end">
+          {query && (
+            <Link
+              href="/shop"
+              className="font-mono text-xs bg-[#FAF9F5] text-[#FF4500] border border-[#1B1C1A] px-3 py-1.5 font-bold tracking-widest hover:bg-[#FF4500] hover:text-white transition-colors"
+            >
+              CLEAR
+            </Link>
+          )}
+          <div className="font-mono text-xs bg-[#1B1C1A] text-white px-3 py-1.5 border border-[#1B1C1A] font-bold tracking-widest">
+            TOTAL ITEMS: [ {displayedProducts.length} ]
+          </div>
         </div>
       </div>
 
@@ -141,6 +169,26 @@ export default function ShopPage() {
       {loading ? (
         <div className="p-16 text-center border-b border-[#1B1C1A] bg-[#FAF9F5] font-mono text-xs font-bold uppercase tracking-widest text-[#1B1C1A]">
           LOADING ARCHIVE DATA...
+        </div>
+      ) : displayedProducts.length === 0 ? (
+        <div className="p-16 text-center border-b border-[#1B1C1A] bg-[#FAF9F5] space-y-4">
+          <div className="font-mono text-xs text-[#FF4500] font-bold uppercase tracking-widest">
+            // NO ARTIFACTS FOUND
+          </div>
+          <h2 className="font-headline text-3xl text-[#1B1C1A]">NO MATCHING ARCHIVE ENTRIES</h2>
+          <p className="font-mono text-xs text-stone-500 max-w-md mx-auto">
+            {query
+              ? `No artifacts matching "${query.toUpperCase()}". Try a different search term or clear the filter.`
+              : 'No artifacts in this category.'}
+          </p>
+          {query && (
+            <Link
+              href="/shop"
+              className="btn-brutalist-yellow text-xs py-3 px-6 font-headline tracking-wider inline-block mt-2"
+            >
+              CLEAR SEARCH FILTER
+            </Link>
+          )}
         </div>
       ) : viewMode === 'GRID' ? (
         <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#FAF9F5] border-b border-[#1B1C1A]">
@@ -246,5 +294,19 @@ export default function ShopPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full bg-[#FAF9F5] min-h-[80vh] p-16 text-center font-mono text-xs font-bold uppercase tracking-widest text-[#1B1C1A]">
+          INITIALIZING ARCHIVE...
+        </div>
+      }
+    >
+      <ShopContent />
+    </Suspense>
   );
 }

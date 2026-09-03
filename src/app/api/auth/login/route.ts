@@ -3,20 +3,29 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import { UserModel } from '@/models/User';
 import { signToken, setAuthCookie, clearAuthCookie } from '@/lib/auth';
+import { applyRateLimit } from '@/lib/rate-limit';
+import { validateBody } from '@/lib/validations/validate';
+import { loginSchema } from '@/lib/validations/auth.schema';
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
+    // Rate limiting: 5 login attempts per 60 seconds per IP
+    const rateLimitResponse = applyRateLimit(req, 'auth_login', { limit: 5, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await req.json().catch(() => null);
-    const { email, password } = body ?? {};
+    const validation = validateBody(loginSchema, body);
+    if (!validation.success) return validation.response;
 
-    if (!email || !password || typeof password !== 'string') {
-      return NextResponse.json({ error: 'email and password are required' }, { status: 400 });
-    }
+    const { email, password } = validation.data;
 
+    await dbConnect();
     const user = await UserModel.findOne({ email: email.toLowerCase() });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return NextResponse.json(
+        { error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } },
+        { status: 401 }
+      );
     }
 
     const token = await signToken({
@@ -32,7 +41,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('POST /api/auth/login failed:', error);
-    return NextResponse.json({ error: 'Login failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Login service encountered an error' } },
+      { status: 500 }
+    );
   }
 }
 

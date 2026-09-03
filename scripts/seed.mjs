@@ -27,6 +27,7 @@ const productSchema = new mongoose.Schema(
       edition: String,
     },
     sizes: [String],
+    stock: { type: Number, default: 25 },
     inStock: Boolean,
     featured: Boolean,
   },
@@ -42,7 +43,12 @@ async function seed() {
   await mongoose.connect(MONGODB_URI, { dbName: 'neo-archive' });
 
   for (const product of products) {
-    await Product.updateOne({ id: product.id }, product, { upsert: true });
+    const payload = {
+      ...product,
+      stock: product.stock ?? 25,
+      inStock: (product.stock ?? 25) > 0,
+    };
+    await Product.updateOne({ id: product.id }, payload, { upsert: true });
   }
 
   const count = await Product.countDocuments();
