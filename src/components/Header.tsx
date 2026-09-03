@@ -4,14 +4,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, X, ShoppingBag, Search, ArrowRight } from 'lucide-react';
+import { Menu, X, ShoppingBag, Search, ArrowRight, Bookmark } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import type { Product } from '@/data/products';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { totalItems, setIsCartOpen } = useCart();
+  const { totalWishlisted } = useWishlist();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +166,20 @@ export const Header: React.FC = () => {
             <Search className="w-4 h-4" />
             <span className="hidden sm:inline-block">SEARCH</span>
           </button>
+
+          {/* SAVED ARTIFACTS / WISHLIST */}
+          {totalWishlisted > 0 && (
+            <Link
+              href="/account"
+              className="hidden sm:inline-flex items-center gap-1 text-[#1B1C1A] hover:text-[#FF4500] transition-colors py-1"
+              title="View Saved Artifacts"
+            >
+              <Bookmark className="w-4 h-4 text-[#FF4500] fill-[#FF4500]" />
+              <span className="font-mono text-xs font-bold bg-[#FAF9F5] border border-[#1B1C1A] px-1.5 py-0.5">
+                {totalWishlisted}
+              </span>
+            </Link>
+          )}
 
           {/* ACCOUNT */}
           <Link

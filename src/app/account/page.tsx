@@ -3,13 +3,36 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { LogIn, UserPlus, LogOut, User, Loader2, Package } from 'lucide-react';
+import { 
+  LogIn, 
+  UserPlus, 
+  LogOut, 
+  User, 
+  Loader2, 
+  Package, 
+  MapPin, 
+  Bookmark, 
+  Check, 
+  Trash2, 
+  Plus 
+} from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import type { Product } from '@/data/products';
+
+interface ShippingAddress {
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+}
 
 interface SessionUser {
   id: string;
   name: string;
   email: string;
   role: string;
+  shippingAddress?: ShippingAddress;
+  wishlist?: string[];
 }
 
 interface OrderView {
@@ -43,6 +66,7 @@ function formatOrderDate(value: string): string {
 }
 
 export default function AccountPage() {
+  const { addToCart } = useCart();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [orders, setOrders] = useState<OrderView[]>([]);
@@ -53,6 +77,20 @@ export default function AccountPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Shipping address state
+  const [addressForm, setAddressForm] = useState<ShippingAddress>({
+    address: '',
+    city: '',
+    postalCode: '',
+    country: '',
+  });
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressMessage, setAddressMessage] = useState('');
+
+  // Wishlist state
+  const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
   // Check existing session on mount
   useEffect(() => {
     fetch('/api/auth/me')
@@ -61,6 +99,32 @@ export default function AccountPage() {
       .catch(() => {})
       .finally(() => setCheckingSession(false));
   }, []);
+
+  // Populate address and wishlist when user loads
+  useEffect(() => {
+    if (user?.shippingAddress) {
+      setAddressForm({
+        address: user.shippingAddress.address || '',
+        city: user.shippingAddress.city || '',
+        postalCode: user.shippingAddress.postalCode || '',
+        country: user.shippingAddress.country || '',
+      });
+    }
+
+    if (user?.wishlist && user.wishlist.length > 0) {
+      setWishlistLoading(true);
+      fetch('/api/products')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((allProducts: Product[]) => {
+          const saved = allProducts.filter((p) => user.wishlist?.includes(p.id));
+          setWishlistProducts(saved);
+        })
+        .catch(() => {})
+        .finally(() => setWishlistLoading(false));
+    } else {
+      setWishlistProducts([]);
+    }
+  }, [user]);
 
   // Fetch orders when logged in
   useEffect(() => {
@@ -78,7 +142,8 @@ export default function AccountPage() {
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to fetch orders');
+          const msg = typeof data?.error === 'object' && data.error ? data.error.message : (data?.error || 'Failed to fetch orders');
+          throw new Error(msg);
         }
         return res.json();
       })
@@ -158,6 +223,53 @@ export default function AccountPage() {
     await fetch('/api/auth/login', { method: 'DELETE' });
     setUser(null);
     setOrders([]);
+    setWishlistProducts([]);
+  };
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddressSaving(true);
+    setAddressMessage('');
+
+    try {
+      const res = await fetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingAddress: addressForm }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data.user);
+        setAddressMessage('✓ DISPATCH ADDRESS STORED TO ARCHIVE PROFILE');
+        setTimeout(() => setAddressMessage(''), 5000);
+      } else {
+        alert(data.error?.message || 'Failed to save address');
+      }
+    } catch (err) {
+      console.error('Save address error:', err);
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+
+  const handleRemoveWishlist = async (productId: string) => {
+    if (!user) return;
+    const nextList = (user.wishlist || []).filter((id) => id !== productId);
+    try {
+      const res = await fetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wishlist: nextList }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        setWishlistProducts((prev) => prev.filter((p) => p.id !== productId));
+      }
+    } catch (err) {
+      console.error('Remove wishlist error:', err);
+    }
   };
 
   return (
@@ -177,7 +289,7 @@ export default function AccountPage() {
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto p-6 sm:p-10">
+      <div className="max-w-3xl mx-auto p-6 sm:p-10">
         {checkingSession ? (
           <div className="p-16 text-center font-mono text-xs font-bold uppercase tracking-widest text-[#1B1C1A]">
             CHECKING SESSION...
@@ -185,6 +297,7 @@ export default function AccountPage() {
         ) : user ? (
           /* ---------- LOGGED IN STATE ---------- */
           <div className="space-y-8">
+            {/* Profile Identity Card */}
             <div className="border border-[#1B1C1A] bg-[#EFEEEA] shadow-[4px_4px_0px_0px_#1B1C1A]">
               <div className="p-6 border-b border-[#1B1C1A] flex items-center gap-4">
                 <div className="w-14 h-14 bg-[#FF4500] text-white flex items-center justify-center border border-[#1B1C1A]">
@@ -209,7 +322,15 @@ export default function AccountPage() {
                   <span className="font-bold text-[#FF4500]">ACTIVE</span>
                 </div>
 
-                <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={`pt-4 grid grid-cols-1 ${user.role === 'admin' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+                  {user.role === 'admin' && (
+                    <Link
+                      href="/admin"
+                      className="font-headline text-sm py-4 px-4 bg-[#FF4500] text-white border border-[#1B1C1A] hover:bg-black transition-colors text-center tracking-wider flex items-center justify-center"
+                    >
+                      ADMIN TERMINAL
+                    </Link>
+                  )}
                   <Link
                     href="/shop"
                     className="btn-brutalist-yellow text-sm py-4 px-6 text-center font-headline tracking-wider"
@@ -225,6 +346,133 @@ export default function AccountPage() {
                 </div>
               </div>
             </div>
+
+            {/* Saved Shipping Address Editor */}
+            <div className="border border-[#1B1C1A] bg-[#EFEEEA] shadow-[4px_4px_0px_0px_#1B1C1A] p-6 space-y-4 font-mono text-xs">
+              <div className="flex justify-between items-center border-b border-[#1B1C1A] pb-3">
+                <div className="flex items-center gap-2 text-[#FF4500] font-bold uppercase tracking-wider">
+                  <MapPin className="w-4 h-4" />
+                  <span>// SAVED DISPATCH ADDRESS</span>
+                </div>
+                <span className="text-stone-500 text-[11px]">AUTO-FILLS AT CHECKOUT</span>
+              </div>
+
+              {addressMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-600 text-emerald-800 font-bold flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>{addressMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveAddress} className="space-y-3">
+                <div>
+                  <label className="font-bold text-[#1B1C1A] block mb-1">STREET ADDRESS:</label>
+                  <input
+                    type="text"
+                    value={addressForm.address}
+                    onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
+                    placeholder="e.g. 1420 Rawson Ave, Apt 4B"
+                    className="w-full bg-[#FAF9F5] border border-[#1B1C1A] p-3 text-sm outline-none focus:border-[#FF4500]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-bold text-[#1B1C1A] block mb-1">CITY:</label>
+                    <input
+                      type="text"
+                      value={addressForm.city}
+                      onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
+                      placeholder="e.g. Buenos Aires"
+                      className="w-full bg-[#FAF9F5] border border-[#1B1C1A] p-3 text-sm outline-none focus:border-[#FF4500]"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-[#1B1C1A] block mb-1">POSTAL CODE:</label>
+                    <input
+                      type="text"
+                      value={addressForm.postalCode}
+                      onChange={(e) => setAddressForm({ ...addressForm, postalCode: e.target.value })}
+                      placeholder="e.g. C1001"
+                      className="w-full bg-[#FAF9F5] border border-[#1B1C1A] p-3 text-sm outline-none focus:border-[#FF4500]"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-[#1B1C1A] block mb-1">COUNTRY:</label>
+                    <input
+                      type="text"
+                      value={addressForm.country}
+                      onChange={(e) => setAddressForm({ ...addressForm, country: e.target.value })}
+                      placeholder="e.g. Argentina"
+                      className="w-full bg-[#FAF9F5] border border-[#1B1C1A] p-3 text-sm outline-none focus:border-[#FF4500]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={addressSaving}
+                    className="btn-brutalist-yellow text-xs py-3 px-6 font-headline tracking-wider flex items-center gap-2"
+                  >
+                    {addressSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>{addressSaving ? 'SAVING ADDRESS...' : 'SAVE DISPATCH ADDRESS'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Saved Wishlist Section */}
+            {wishlistProducts.length > 0 && (
+              <div className="border border-[#1B1C1A] bg-[#EFEEEA] shadow-[4px_4px_0px_0px_#1B1C1A] p-6 space-y-4 font-mono text-xs">
+                <div className="flex justify-between items-center border-b border-[#1B1C1A] pb-3">
+                  <div className="flex items-center gap-2 text-[#FF4500] font-bold uppercase tracking-wider">
+                    <Bookmark className="w-4 h-4" />
+                    <span>// SAVED ARTIFACTS ({wishlistProducts.length})</span>
+                  </div>
+                  <Link href="/shop" className="text-stone-500 hover:text-black underline font-bold">
+                    EXPLORE MORE
+                  </Link>
+                </div>
+
+                <div className="divide-y divide-[#1B1C1A] bg-[#FAF9F5] border border-[#1B1C1A]">
+                  {wishlistProducts.map((p) => (
+                    <div key={p.id} className="p-4 flex items-center justify-between gap-4">
+                      <Link href={`/product/${p.id}`} className="flex items-center gap-4 min-w-0 group">
+                        <div className="relative w-14 h-14 border border-[#1B1C1A] bg-[#111211] flex-shrink-0">
+                          <Image src={p.image} alt={p.name} fill className="object-cover" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-headline text-lg text-[#1B1C1A] group-hover:text-[#FF4500] transition-colors truncate">
+                            {p.name}
+                          </div>
+                          <div className="font-mono text-[11px] text-stone-500">
+                            {p.sku} // ${p.price.toFixed(2)}
+                          </div>
+                        </div>
+                      </Link>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => addToCart(p, p.sizes[0] || 'M')}
+                          className="btn-brutalist-yellow text-xs py-2.5 px-4 font-headline tracking-wider flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>ADD BAG</span>
+                        </button>
+                        <button
+                          onClick={() => handleRemoveWishlist(p.id)}
+                          className="p-2 border border-[#1B1C1A] text-red-600 hover:bg-red-600 hover:text-white transition-colors"
+                          title="Remove from saved"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ---------- ORDER HISTORY SECTION ---------- */}
             <div className="space-y-4">
@@ -321,6 +569,20 @@ export default function AccountPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Order Footer with Tracking Link */}
+                      <div className="p-3 bg-[#EFEEEA] border-t border-[#1B1C1A] flex justify-between items-center text-xs font-mono">
+                        <span className="text-stone-500">
+                          {order.items.length} {order.items.length === 1 ? 'ITEM' : 'ITEMS'}
+                        </span>
+                        <Link
+                          href={`/orders/${order.orderNumber}`}
+                          className="font-bold text-[#FF4500] hover:underline flex items-center gap-1 uppercase tracking-wider"
+                        >
+                          <span>VIEW RECEIPT & LIVE TRACKING</span>
+                          <span>→</span>
+                        </Link>
                       </div>
                     </div>
                   ))}

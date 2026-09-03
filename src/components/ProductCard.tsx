@@ -3,9 +3,10 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Eye, Plus } from 'lucide-react';
+import { Eye, Plus, Bookmark } from 'lucide-react';
 import { Product } from '@/data/products';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 
 interface ProductCardProps {
   product: Product;
@@ -19,6 +20,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   showQuickActions = true,
 }) => {
   const { addToCart } = useCart();
+  const { isWishlisted, toggleWishlist } = useWishlist();
+  const wishlisted = isWishlisted(product.id);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -51,9 +54,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </div>
           )}
 
-          {/* Top-Right Index Number Badge (e.g., / 001) */}
-          <div className="absolute top-2.5 right-2.5 z-10">
-            <span className="bg-[#FAF9F5] text-[#1B1C1A] font-mono text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 border border-[#1B1C1A] tracking-widest uppercase shadow-sm">
+          {/* Top-Right: Bookmark + Index Number */}
+          <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleWishlist(product.id);
+              }}
+              className={`p-1.5 border border-[#1B1C1A] transition-colors shadow-sm ${
+                wishlisted
+                  ? 'bg-[#FF4500] text-white'
+                  : 'bg-[#FAF9F5] text-[#1B1C1A] hover:bg-[#FCD400]'
+              }`}
+              title={wishlisted ? 'Remove from Saved' : 'Save to Archive Wishlist'}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${wishlisted ? 'fill-white' : ''}`} />
+            </button>
+            <span className="bg-[#FAF9F5] text-[#1B1C1A] font-mono text-[10px] sm:text-[11px] font-bold px-2.5 py-1 border border-[#1B1C1A] tracking-widest uppercase shadow-sm">
               / {product.index || '001'}
             </span>
           </div>

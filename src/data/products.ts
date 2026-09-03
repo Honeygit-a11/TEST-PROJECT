@@ -23,6 +23,7 @@ export interface Product {
   };
   sizes: ('S' | 'M' | 'L' | 'XL' | 'ONE SIZE')[];
   inStock: boolean;
+  stock?: number;
   featured?: boolean;
 }
 

@@ -4,6 +4,7 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { CartDrawer } from '@/components/CartDrawer';
 import { CartProvider } from '@/context/CartContext';
+import { WishlistProvider } from '@/context/WishlistContext';
 
 export const metadata: Metadata = {
   title: 'NEO-ARCHIVE // High-Fidelity Brutalist Streetwear',
@@ -19,12 +20,14 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <CartProvider>
-          <div className="min-h-screen flex flex-col justify-between bg-[var(--bg-surface)] text-[var(--text-ink)]">
-            <Header />
-            <main className="flex-1 w-full">{children}</main>
-            <Footer />
-            <CartDrawer />
-          </div>
+          <WishlistProvider>
+            <div className="min-h-screen flex flex-col justify-between bg-[var(--bg-surface)] text-[var(--text-ink)]">
+              <Header />
+              <main className="flex-1 w-full">{children}</main>
+              <Footer />
+              <CartDrawer />
+            </div>
+          </WishlistProvider>
         </CartProvider>
       </body>
     </html>

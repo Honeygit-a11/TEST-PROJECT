@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Trash2, Plus, Minus, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
@@ -27,17 +27,66 @@ export default function BagPage() {
   const [customer, setCustomer] = useState({ ...EMPTY_CUSTOMER });
   const [submitting, setSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
+  const [hasSavedAddress, setHasSavedAddress] = useState(false);
 
-  const discount = discountApplied ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
+  // Auto-fill logged in customer details
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          const addr = data.user.shippingAddress;
+          const hasAddr = Boolean(addr?.address && addr?.city);
+          if (hasAddr) setHasSavedAddress(true);
+
+          setCustomer((prev) => ({
+            ...prev,
+            name: prev.name || data.user.name || '',
+            email: prev.email || data.user.email || '',
+            address: prev.address || addr?.address || '',
+            city: prev.city || addr?.city || '',
+            postalCode: prev.postalCode || addr?.postalCode || '',
+            country: prev.country || addr?.country || '',
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const [promoMessage, setPromoMessage] = useState('');
+  const [promoDiscountAmount, setPromoDiscountAmount] = useState(0);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+
+  const discount = discountApplied ? promoDiscountAmount : 0;
   const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT;
-  const grandTotal = Math.round((subtotal - discount + shipping) * 100) / 100;
+  const grandTotal = Math.max(0, Math.round((subtotal - discount + shipping) * 100) / 100);
 
-  const handleApplyPromo = (e: React.FormEvent) => {
+  const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (promoCode.trim().toUpperCase() === 'ARCHIVE10' || promoCode.trim().toUpperCase() === 'NEO2026') {
-      setDiscountApplied(true);
-    } else {
-      alert('INVALID PROMO CODE. TRY "ARCHIVE10" OR "NEO2026"');
+    setPromoMessage('');
+    if (!promoCode.trim()) return;
+
+    setValidatingPromo(true);
+    try {
+      const res = await fetch('/api/promos/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode.trim(), subtotal }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setDiscountApplied(true);
+        setPromoDiscountAmount(data.discount);
+        setPromoMessage(`✓ ${data.code} APPLIED (-$${data.discount.toFixed(2)})`);
+      } else {
+        setDiscountApplied(false);
+        setPromoDiscountAmount(0);
+        setPromoMessage(`// ${data.error?.message || 'INVALID PROMO CODE'}`);
+      }
+    } catch {
+      setPromoMessage('// ERROR VALIDATING CODE');
+    } finally {
+      setValidatingPromo(false);
     }
   };
 
@@ -98,9 +147,18 @@ export default function BagPage() {
           ESTIMATED DELIVERY: 2-4 BUSINESS DAYS
         </div>
 
-        <Link href="/shop" className="btn-brutalist text-lg py-4 px-8">
-          RETURN TO CATALOG
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <Link
+            href={`/orders/${orderNumber}`}
+            className="btn-brutalist-yellow text-base sm:text-lg py-4 px-8 flex items-center justify-center gap-2"
+          >
+            <span>TRACK ORDER // RECEIPT</span>
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+          <Link href="/shop" className="btn-brutalist text-base sm:text-lg py-4 px-8 text-center">
+            RETURN TO CATALOG
+          </Link>
+        </div>
       </div>
     );
   }
@@ -209,22 +267,33 @@ export default function BagPage() {
                     onChange={(e) => setPromoCode(e.target.value)}
                     className="flex-1 bg-[var(--bg-surface)] font-mono text-xs p-3 border-grid outline-none uppercase"
                   />
-                  <button type="submit" className="btn-brutalist text-xs px-4">
-                    APPLY
+                  <button type="submit" disabled={validatingPromo} className="btn-brutalist text-xs px-4">
+                    {validatingPromo ? 'CHECKING...' : 'APPLY'}
                   </button>
                 </div>
-                {discountApplied && (
-                  <span className="font-mono text-xs text-emerald-700 font-bold block">
-                    ✓ 10% ARCHIVE DISCOUNT APPLIED!
+                {promoMessage && (
+                  <span
+                    className={`font-mono text-xs font-bold block ${
+                      discountApplied ? 'text-emerald-700' : 'text-red-600'
+                    }`}
+                  >
+                    {promoMessage}
                   </span>
                 )}
               </form>
 
               {/* Shipping Details Form */}
               <div className="space-y-2 border-t-grid pt-4">
-                <label className="font-mono text-xs font-bold text-[var(--brand-primary)] block">
-                  // SHIPPING DETAILS:
-                </label>
+                <div className="flex justify-between items-center">
+                  <label className="font-mono text-xs font-bold text-[var(--brand-primary)] block">
+                    // SHIPPING DETAILS:
+                  </label>
+                  {hasSavedAddress && (
+                    <span className="font-mono text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-500 font-bold px-2 py-0.5">
+                      ✓ PROFILE ADDRESS LOADED
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text"

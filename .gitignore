@@ -20,3 +20,7 @@ node_modules/
 
 # project-specific
 design-tokens.json
+
+# documentation
+DOCS.md
+doc.md

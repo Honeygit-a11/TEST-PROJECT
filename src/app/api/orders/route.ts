@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { OrderModel, OrderItem, ORDER_STATUSES } from '@/models/Order';
 import { ProductModel } from '@/models/Product';
+import { PromoCodeModel } from '@/models/PromoCode';
 import { getSession, requireUser } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { validateBody } from '@/lib/validations/validate';
@@ -9,7 +10,6 @@ import { createOrderSchema } from '@/lib/validations/order.schema';
 
 const SHIPPING_FLAT = 8.0;
 const FREE_SHIPPING_THRESHOLD = 120.0;
-const VALID_PROMOS: Record<string, number> = { ARCHIVE10: 0.1, NEO2026: 0.1 };
 
 function generateOrderNumber(): string {
   const stamp = Date.now().toString(36).toUpperCase();
@@ -156,19 +156,46 @@ export async function POST(req: NextRequest) {
     let discount = 0;
     let appliedPromo: string | undefined;
     if (promoCode) {
-      const rate = VALID_PROMOS[promoCode.toUpperCase()];
-      if (!rate) {
-        // If promo is invalid, roll back the stock decrements!
+      const normalized = promoCode.toUpperCase();
+      let promo = await PromoCodeModel.findOne({ code: normalized, active: true }).lean();
+
+      // Fallback for static default archive promos if not yet seeded
+      if (!promo && (normalized === 'ARCHIVE10' || normalized === 'NEO2026')) {
+        promo = {
+          code: normalized,
+          discountType: 'percentage',
+          discountValue: 10,
+          minSubtotal: 0,
+          active: true,
+          usedCount: 0,
+        } as any;
+      }
+
+      if (
+        !promo ||
+        (promo.expiresAt && new Date(promo.expiresAt).getTime() < Date.now()) ||
+        (typeof promo.maxUses === 'number' && promo.usedCount >= promo.maxUses) ||
+        subtotal < (promo.minSubtotal || 0)
+      ) {
+        // Roll back decrements
         for (const dec of decremented) {
           await ProductModel.updateOne({ id: dec.productId }, { $inc: { stock: dec.quantity } });
         }
         return NextResponse.json(
-          { error: { code: 'INVALID_PROMO', message: `Invalid promo code: ${promoCode}` } },
-          { status: 400 }
+          { error: { code: 'INVALID_PROMO', message: `Invalid, expired, or ineligible promo code: ${promoCode}` } },
+          { status: 422 }
         );
       }
-      discount = Number((subtotal * rate).toFixed(2));
-      appliedPromo = promoCode.toUpperCase();
+
+      if (promo.discountType === 'percentage') {
+        discount = Number((subtotal * (promo.discountValue / 100)).toFixed(2));
+      } else {
+        discount = Math.min(subtotal, promo.discountValue);
+      }
+      appliedPromo = promo.code;
+
+      // Increment usedCount if it exists in DB
+      await PromoCodeModel.updateOne({ code: promo.code }, { $inc: { usedCount: 1 } });
     }
 
     const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT;
