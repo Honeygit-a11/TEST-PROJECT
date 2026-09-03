@@ -201,13 +201,15 @@ export default function AdminPromosPage() {
                     {/* Discount Value */}
                     <td className="p-3.5 font-bold text-sm">
                       {promo.discountType === 'percentage'
-                        ? `${promo.discountValue}% OFF`
-                        : `$${promo.discountValue.toFixed(2)} OFF`}
+                        ? `${promo.discountValue ?? 0}% OFF`
+                        : `$${(promo.discountValue ?? 0).toFixed(2)} OFF`}
                     </td>
 
                     {/* Min Subtotal */}
                     <td className="p-3.5">
-                      {promo.minSubtotal > 0 ? `$${promo.minSubtotal.toFixed(2)}` : 'NO MINIMUM'}
+                      {(promo.minSubtotal ?? 0) > 0
+                        ? `$${(promo.minSubtotal ?? 0).toFixed(2)}`
+                        : 'NO MINIMUM'}
                     </td>
 
                     {/* Redemptions / Limits */}

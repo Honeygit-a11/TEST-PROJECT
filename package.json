@@ -9,7 +9,8 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "seed": "node --env-file=.env scripts/seed.mjs",
-    "seed:admin": "node --env-file=.env scripts/create-admin.mjs"
+    "seed:admin": "node --env-file=.env scripts/create-admin.mjs",
+    "db:reset-seed": "node --env-file=.env scripts/reset-and-seed.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
