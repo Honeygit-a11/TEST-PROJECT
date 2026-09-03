@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
 export const AUTH_COOKIE = 'neo_archive_token';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -67,4 +68,31 @@ export function clearAuthCookie(): void {
 
 export async function getSession(): Promise<SessionUser | null> {
   return verifySession(cookies().get(AUTH_COOKIE)?.value);
+}
+
+/**
+ * Route guards. Usage inside a route handler:
+ *   const auth = await requireAdmin();
+ *   if (!auth.ok) return auth.response;
+ *   // ...use auth.session
+ */
+export type GuardResult =
+  | { ok: true; session: SessionUser }
+  | { ok: false; response: NextResponse };
+
+export async function requireUser(): Promise<GuardResult> {
+  const session = await getSession();
+  if (!session) {
+    return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  return { ok: true, session };
+}
+
+export async function requireAdmin(): Promise<GuardResult> {
+  const result = await requireUser();
+  if (!result.ok) return result;
+  if (result.session.role !== 'admin') {
+    return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return result;
 }

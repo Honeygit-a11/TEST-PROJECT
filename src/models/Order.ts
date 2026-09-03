@@ -1,5 +1,8 @@
 import { Schema, model, models } from 'mongoose';
 
+export const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
 export interface OrderItem {
   productId: string;
   name: string;
@@ -26,7 +29,7 @@ export interface OrderDoc {
   promoCode?: string;
   shipping: number;
   total: number;
-  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+  status: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,7 +66,7 @@ const orderSchema = new Schema<OrderDoc>(
     total: { type: Number, required: true, min: 0 },
     status: {
       type: String,
-      enum: ['pending', 'paid', 'shipped', 'delivered', 'cancelled'],
+      enum: [...ORDER_STATUSES],
       default: 'pending',
     },
   },

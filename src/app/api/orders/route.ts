@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
-import { OrderModel, OrderItem } from '@/models/Order';
+import { OrderModel, OrderItem, ORDER_STATUSES } from '@/models/Order';
 import { ProductModel } from '@/models/Product';
-import { getSession } from '@/lib/auth';
+import { getSession, requireUser } from '@/lib/auth';
 
 interface IncomingItem {
   productId?: unknown;
@@ -18,6 +18,37 @@ function generateOrderNumber(): string {
   const stamp = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `NX-${stamp}-${rand}`;
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
+
+    await dbConnect();
+    const { searchParams } = new URL(req.url);
+    const filter: Record<string, unknown> = {};
+
+    if (auth.session.role === 'admin') {
+      // Admins may list every order, optionally filtered by status.
+      const status = searchParams.get('status');
+      if (status) {
+        if (!(ORDER_STATUSES as readonly string[]).includes(status)) {
+          return NextResponse.json({ error: `Invalid status: ${status}` }, { status: 400 });
+        }
+        filter.status = status;
+      }
+    } else {
+      // Customers only see their own orders.
+      filter.userEmail = auth.session.email;
+    }
+
+    const orders = await OrderModel.find(filter).sort({ createdAt: -1 }).lean();
+    return NextResponse.json(orders);
+  } catch (error) {
+    console.error('GET /api/orders failed:', error);
+    return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
