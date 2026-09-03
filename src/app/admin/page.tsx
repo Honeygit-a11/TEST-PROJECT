@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Package, ShoppingBag, AlertTriangle, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { Package, ShoppingBag, AlertTriangle, ArrowRight, Loader2, RefreshCw, Activity } from 'lucide-react';
 
 interface ProductItem {
   id: string;
@@ -24,17 +24,59 @@ interface OrderItem {
   createdAt: string;
 }
 
+interface HealthData {
+  status: string;
+  database: {
+    connected: boolean;
+    latencyMs: number;
+    collections: {
+      totalEntities: number;
+      products: number;
+      orders: number;
+      users: number;
+      promoCodes: number;
+      reviews: number;
+      subscribers: number;
+    };
+  };
+  runtime: {
+    uptimeSeconds: number;
+    memory: {
+      rssMb: number;
+      heapUsedMb: number;
+    };
+  };
+}
+
 export default function AdminOverviewPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [health, setHealth] = useState<HealthData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pinging, setPinging] = useState(false);
+
+  const fetchHealth = async () => {
+    setPinging(true);
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const h = await res.json();
+        setHealth(h);
+      }
+    } catch (e) {
+      console.error('Health ping error:', e);
+    } finally {
+      setPinging(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [prodRes, orderRes] = await Promise.all([
+      const [prodRes, orderRes, healthRes] = await Promise.all([
         fetch('/api/products'),
         fetch('/api/orders'),
+        fetch('/api/health'),
       ]);
 
       if (prodRes.ok) {
@@ -45,6 +87,11 @@ export default function AdminOverviewPage() {
       if (orderRes.ok) {
         const orderData = await orderRes.json();
         setOrders(Array.isArray(orderData) ? orderData : []);
+      }
+
+      if (healthRes.ok) {
+        const hData = await healthRes.json();
+        setHealth(hData);
       }
     } catch (err) {
       console.error('Failed to load admin metrics:', err);
@@ -89,6 +136,42 @@ export default function AdminOverviewPage() {
           <span>REFRESH DATA</span>
         </button>
       </div>
+
+      {/* Live System Diagnostics Widget */}
+      {health && (
+        <div className="border border-[#1B1C1A] bg-[#1B1C1A] text-white p-4 font-mono text-xs flex flex-wrap items-center justify-between gap-4 shadow-[4px_4px_0px_0px_#1B1C1A]">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2.5 py-1 font-bold uppercase">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>SYSTEM: {health.status}</span>
+            </span>
+            <span className="text-stone-300">
+              MONGODB LATENCY:{' '}
+              <span className="font-bold text-[#FCD400]">{health.database.latencyMs}ms</span>
+            </span>
+            <span className="text-stone-600 hidden sm:inline">|</span>
+            <span className="text-stone-300 hidden sm:inline">
+              RECORDS MONITORED:{' '}
+              <span className="font-bold text-white">
+                {health.database.collections.totalEntities}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4 text-stone-400 text-[11px]">
+            <span>HEAP: {health.runtime.memory.heapUsedMb}MB</span>
+            <span>UPTIME: {Math.floor(health.runtime.uptimeSeconds / 60)}m</span>
+            <button
+              onClick={fetchHealth}
+              disabled={pinging}
+              className="text-[#FCD400] hover:underline font-bold uppercase inline-flex items-center gap-1"
+            >
+              <Activity className={`w-3 h-3 ${pinging ? 'animate-spin' : ''}`} />
+              <span>{pinging ? 'PINGING...' : 'DIAGNOSTIC PING'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

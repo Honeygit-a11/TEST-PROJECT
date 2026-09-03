@@ -17,6 +17,18 @@ const SORT_LABELS: Record<string, string> = {
   NAME_AZ: 'NAME: A → Z',
 };
 
+const COLLECTION_NAMES: Record<string, string> = {
+  'archive-v1': 'ARCHIVE V1 // SYSTEM CORE',
+  'system-02': 'SYSTEM-02 // TECHNICAL RIPSTOP',
+  'brutal-line': 'BRUTAL-LINE // HEAVY FLEECE',
+};
+
+const COLLECTION_PRODUCT_MAP: Record<string, string[]> = {
+  'archive-v1': ['nx-001', 'nx-006', 'nx-007'],
+  'system-02': ['nx-005', 'nx-004'],
+  'brutal-line': ['nx-002', 'nx-003'],
+};
+
 function ShopContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -25,6 +37,7 @@ function ShopContent() {
   // Read URL query params
   const query = searchParams.get('q') || '';
   const selectedCategory = searchParams.get('category') || 'ALL';
+  const selectedCollection = searchParams.get('collection') || '';
   const sortBy = searchParams.get('sort') || 'FEATURED';
   const inStockOnly = searchParams.get('inStock') === 'true';
   const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
@@ -98,6 +111,12 @@ function ShopContent() {
   const displayedProducts = useMemo(() => {
     let list = [...products];
 
+    // 0. Collection Filter
+    if (selectedCollection && COLLECTION_PRODUCT_MAP[selectedCollection]) {
+      const allowedIds = COLLECTION_PRODUCT_MAP[selectedCollection];
+      list = list.filter((p) => allowedIds.includes(p.id));
+    }
+
     // 1. Category Filter
     if (selectedCategory !== 'ALL') {
       if (selectedCategory === 'TOPS') {
@@ -148,13 +167,14 @@ function ShopContent() {
     }
 
     return list;
-  }, [products, selectedCategory, inStockOnly, minPrice, maxPrice, selectedColor, sortBy]);
+  }, [products, selectedCategory, selectedCollection, inStockOnly, minPrice, maxPrice, selectedColor, sortBy]);
 
   const visibleProducts = displayedProducts.slice(0, visibleCount);
 
   const hasActiveFilters = Boolean(
     query ||
     selectedCategory !== 'ALL' ||
+    selectedCollection ||
     inStockOnly ||
     minPrice !== null ||
     maxPrice !== null ||
@@ -409,6 +429,17 @@ function ShopContent() {
             <span className="bg-[#EFEEEA] border border-[#1B1C1A] px-2.5 py-1 flex items-center gap-1.5">
               <span>CATEGORY: {selectedCategory}</span>
               <button onClick={() => updateParam('category', null)} className="hover:text-red-600">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+
+          {selectedCollection && (
+            <span className="bg-[#FCD400] text-[#1B1C1A] border border-[#1B1C1A] px-2.5 py-1 flex items-center gap-1.5 font-bold">
+              <span>
+                COLLECTION: {COLLECTION_NAMES[selectedCollection] || selectedCollection.toUpperCase()}
+              </span>
+              <button onClick={() => updateParam('collection', null)} className="hover:text-red-600">
                 <X className="w-3 h-3" />
               </button>
             </span>

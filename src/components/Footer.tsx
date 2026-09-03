@@ -1,9 +1,46 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 export const Footer: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ message: string; success: boolean } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setSubmitting(true);
+    setFeedback(null);
+
+    try {
+      const res = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), source: 'footer' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFeedback({
+          message: data.message || 'ACCESS GRANTED // YOU ARE ON THE PRIORITY LIST',
+          success: true,
+        });
+        setEmail('');
+      } else {
+        const errorMsg =
+          typeof data.error === 'object' && data.error?.message
+            ? data.error.message
+            : 'FAILED TO REGISTER IDENTITY';
+        setFeedback({ message: errorMsg, success: false });
+      }
+    } catch {
+      setFeedback({ message: 'NETWORK ERROR // CANNOT ACCESS PROTOCOL', success: false });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <footer className="w-full bg-[var(--text-ink)] text-[var(--bg-surface)] border-t-grid">
       {/* Upper Grid Section */}
@@ -19,20 +56,37 @@ export const Footer: React.FC = () => {
             </p>
           </div>
 
-          <form onSubmit={(e) => e.preventDefault()} className="flex flex-col sm:flex-row gap-0">
-            <input
-              type="email"
-              placeholder="ENTER EMAIL ADDRESS..."
-              className="flex-1 bg-[var(--bg-surface)] text-[var(--text-ink)] font-mono text-xs p-3.5 border border-stone-800 outline-none uppercase placeholder:text-stone-500"
-              required
-            />
-            <button
-              type="submit"
-              className="btn-brutalist-yellow font-headline px-6 py-3.5 text-sm uppercase"
-            >
-              SUBSCRIBE
-            </button>
-          </form>
+          <div className="space-y-2">
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-0">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ENTER EMAIL ADDRESS..."
+                className="flex-1 bg-[var(--bg-surface)] text-[var(--text-ink)] font-mono text-xs p-3.5 border border-stone-800 outline-none uppercase placeholder:text-stone-500"
+                required
+              />
+              <button
+                type="submit"
+                disabled={submitting}
+                className="btn-brutalist-yellow font-headline px-6 py-3.5 text-sm uppercase flex items-center justify-center gap-2"
+              >
+                {submitting ? 'CONNECTING...' : 'SUBSCRIBE'}
+              </button>
+            </form>
+
+            {feedback && (
+              <div
+                className={`font-mono text-xs p-2.5 border font-bold ${
+                  feedback.success
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-600'
+                    : 'bg-red-950/80 text-red-400 border-red-600'
+                }`}
+              >
+                {feedback.message}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Col 2: Navigation Links */}

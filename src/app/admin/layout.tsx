@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldAlert, Package, ShoppingCart, LayoutDashboard, ArrowLeft, Loader2, Tag, TrendingUp } from 'lucide-react';
+import { ShieldAlert, Package, ShoppingCart, LayoutDashboard, ArrowLeft, Loader2, Tag, TrendingUp, Users } from 'lucide-react';
 
 interface SessionUser {
   id: string;
@@ -81,6 +81,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: 'ORDERS & FULFILLMENT', href: '/admin/orders', icon: ShoppingCart },
     { label: 'PROMO CODES', href: '/admin/promos', icon: Tag },
     { label: 'ANALYTICS', href: '/admin/analytics', icon: TrendingUp },
+    { label: 'SUBSCRIBERS', href: '/admin/subscribers', icon: Users },
   ];
 
   return (

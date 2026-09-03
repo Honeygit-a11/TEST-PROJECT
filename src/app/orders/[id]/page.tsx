@@ -14,7 +14,10 @@ import {
   ArrowLeft, 
   Printer, 
   MapPin, 
-  Loader2 
+  Loader2,
+  Ban,
+  XCircle,
+  X
 } from 'lucide-react';
 
 interface OrderItem {
@@ -38,22 +41,23 @@ interface CustomerInfo {
 interface OrderData {
   _id?: string;
   orderNumber: string;
-  status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+  userEmail?: string;
+  status: string;
   total: number;
-  subtotal?: number;
-  discount?: number;
+  subtotal: number;
+  discount: number;
   promoCode?: string;
-  shipping?: number;
+  shipping: number;
   customer?: CustomerInfo;
-  items?: OrderItem[];
+  items: OrderItem[];
   createdAt: string;
 }
 
 const STATUS_STEPS = [
-  { key: 'pending', label: 'ORDER PLACED', desc: 'Order logged into archive', icon: Clock },
-  { key: 'paid', label: 'PAYMENT VERIFIED', desc: 'Authorized for dispatch', icon: CheckCircle2 },
-  { key: 'shipped', label: 'IN TRANSIT', desc: 'Dispatched from warehouse', icon: Truck },
-  { key: 'delivered', label: 'DELIVERED', desc: 'Handed over to recipient', icon: Check },
+  { key: 'pending', label: '01 // ORDER PLACED', icon: Clock, desc: 'Manifest created in queue' },
+  { key: 'paid', label: '02 // PAYMENT VERIFIED', icon: CheckCircle2, desc: 'Funds secured & cleared' },
+  { key: 'shipped', label: '03 // IN TRANSIT', icon: Truck, desc: 'Dispatched via express freight' },
+  { key: 'delivered', label: '04 // DELIVERED', icon: Package, desc: 'Handed to recipient' },
 ];
 
 const STATUS_ORDER_INDEX: Record<string, number> = {
@@ -72,10 +76,8 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: 'bg-stone-300 text-stone-600 line-through',
 };
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', {
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
     day: '2-digit',
     year: 'numeric',
@@ -89,6 +91,10 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState('');
 
   const fetchOrder = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -105,6 +111,31 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
+    }
+  };
+
+  const handleCancelOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+    setCancelling(true);
+    setCancelError('');
+
+    try {
+      const res = await fetch(`/api/orders/${order.orderNumber}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verifyEmail.trim() || order.customer?.email || order.userEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Failed to cancel order');
+      }
+      setOrder((prev) => (prev ? { ...prev, status: 'cancelled' } : null));
+      setCancelModalOpen(false);
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Error cancelling order');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -382,15 +413,95 @@ export default function OrderTrackingPage({ params }: { params: { id: string } }
             ← BACK TO ARCHIVE CATALOG
           </Link>
 
-          <button
-            onClick={() => window.print()}
-            className="font-headline text-xs py-4 px-6 border border-[#1B1C1A] bg-[#EFEEEA] hover:bg-black hover:text-white transition-colors inline-flex items-center gap-2 tracking-wider"
-          >
-            <Printer className="w-4 h-4" />
-            <span>PRINT MANIFEST RECEIPT</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {['pending', 'paid'].includes(order.status.toLowerCase()) && (
+              <button
+                onClick={() => {
+                  setVerifyEmail('');
+                  setCancelError('');
+                  setCancelModalOpen(true);
+                }}
+                className="font-headline text-xs py-4 px-6 border border-red-600 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white transition-colors tracking-wider inline-flex items-center gap-2"
+              >
+                <Ban className="w-4 h-4" />
+                <span>CANCEL ORDER // VOID MANIFEST</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => window.print()}
+              className="font-headline text-xs py-4 px-6 border border-[#1B1C1A] bg-[#EFEEEA] hover:bg-black hover:text-white transition-colors inline-flex items-center gap-2 tracking-wider"
+            >
+              <Printer className="w-4 h-4" />
+              <span>PRINT MANIFEST RECEIPT</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Cancellation Modal */}
+      {cancelModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="max-w-md w-full border-2 border-red-600 bg-[#FAF9F5] p-6 sm:p-8 space-y-4 shadow-[6px_6px_0px_0px_#dc2626]">
+            <div className="flex justify-between items-start border-b border-[#1B1C1A] pb-3">
+              <div>
+                <span className="font-mono text-xs text-red-600 font-bold uppercase tracking-widest block">
+                  // REVERSE PROTOCOL
+                </span>
+                <h3 className="font-headline text-2xl text-[#1B1C1A]">CANCEL ORDER MANIFEST</h3>
+              </div>
+              <button
+                onClick={() => setCancelModalOpen(false)}
+                className="p-1 border border-[#1B1C1A] hover:bg-black hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="font-body text-sm text-[#5D4038]">
+              Are you sure you want to cancel order <span className="font-bold text-black">{order.orderNumber}</span>? Reserved garments will immediately be returned to public inventory.
+            </p>
+
+            <form onSubmit={handleCancelOrder} className="space-y-4 font-mono text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-[#1B1C1A] block">CONFIRMATION EMAIL:</label>
+                <input
+                  type="email"
+                  required
+                  value={verifyEmail}
+                  onChange={(e) => setVerifyEmail(e.target.value)}
+                  placeholder={order.customer?.email || 'Enter order email...'}
+                  className="w-full bg-[#EFEEEA] border border-[#1B1C1A] p-2.5 outline-none"
+                />
+              </div>
+
+              {cancelError && (
+                <div className="p-2.5 bg-red-100 border border-red-600 text-red-700 font-bold">
+                  {cancelError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelModalOpen(false)}
+                  className="px-4 py-2.5 border border-[#1B1C1A] bg-[#EFEEEA] hover:bg-stone-200"
+                >
+                  KEEP ORDER
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelling}
+                  className="px-5 py-2.5 bg-red-600 text-white font-bold hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                  <span>{cancelling ? 'CANCELLING...' : 'CONFIRM CANCEL'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
