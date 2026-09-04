@@ -17,10 +17,10 @@ node_modules/
 .DS_Store
 *.pem
 .vercel
-
 # project-specific
 design-tokens.json
 
 # documentation
 DOCS.md
 doc.md
+CLAUDE.md
