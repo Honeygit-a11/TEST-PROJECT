@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import { PromoCodeModel } from '@/models/PromoCode';
 import { requireAdmin } from '@/lib/auth';
+import { validateBody } from '@/lib/validations/validate';
+import { updatePromoCodeSchema } from '@/lib/validations/promo.schema';
 
 interface RouteContext {
   params: { id: string };
@@ -14,15 +16,28 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     const id = params.id;
     const body = await req.json().catch(() => null);
+    const validation = validateBody(updatePromoCodeSchema, body);
+    if (!validation.success) return validation.response;
 
     await dbConnect();
     const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { code: id.toUpperCase() };
 
-    const updated = await PromoCodeModel.findOneAndUpdate(
-      query,
-      { $set: body },
-      { new: true }
-    ).lean();
+    let updated;
+    try {
+      updated = await PromoCodeModel.findOneAndUpdate(
+        query,
+        { $set: validation.data },
+        { new: true }
+      ).lean();
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return NextResponse.json(
+          { error: { code: 'DUPLICATE_PROMO_CODE', message: 'A promo code with this code already exists' } },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     if (!updated) {
       return NextResponse.json(

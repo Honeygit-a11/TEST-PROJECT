@@ -18,8 +18,11 @@ export async function GET(req: NextRequest) {
     if (category) filter.category = category.toUpperCase();
     if (featured === 'true') filter.featured = true;
     if (search) {
-      // Search across the fields the header search box exposes (name, sku, color)
-      const rx = { $regex: search, $options: 'i' };
+      // Search across the fields the header search box exposes (name, sku, color).
+      // Escape regex metacharacters so user input is treated literally (avoids
+      // malformed-pattern errors and regex ReDoS).
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = { $regex: escaped, $options: 'i' };
       filter.$or = [{ name: rx }, { sku: rx }, { color: rx }];
     }
 

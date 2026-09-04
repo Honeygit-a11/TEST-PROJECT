@@ -100,6 +100,7 @@ export const Footer: React.FC = () => {
               <li><Link href="/shop?category=T-SHIRTS" className="hover:text-[var(--brand-yellow)] transition-colors">T-SHIRTS</Link></li>
               <li><Link href="/shop?category=OUTERWEAR" className="hover:text-[var(--brand-yellow)] transition-colors">OUTERWEAR</Link></li>
               <li><Link href="/shop?category=ACCESSORIES" className="hover:text-[var(--brand-yellow)] transition-colors">ACCESSORIES</Link></li>
+              <li><Link href="/shop?category=PANTS" className="hover:text-[var(--brand-yellow)] transition-colors">PANTS</Link></li>
               <li><Link href="/collections" className="hover:text-[var(--brand-yellow)] transition-colors">COLLECTIONS</Link></li>
             </ul>
           </div>

@@ -96,7 +96,7 @@ export const Header: React.FC = () => {
       {/* Top Streetwear Brutalist Ticker Bar */}
       <div className="w-full bg-[#1B1C1A] text-[#FAF9F5] px-4 py-1.5 border-b border-[#1B1C1A] font-mono text-[10px] sm:text-xs flex items-center justify-between tracking-widest uppercase select-none">
         <div className="hidden sm:flex items-center gap-2 text-stone-300">
-          <span className="text-[#FCD400] font-bold">//</span> FREE SHIP OVER $150
+          <span className="text-[#FCD400] font-bold">//</span> FREE SHIP OVER $120
         </div>
         <div className="flex-1 sm:flex-none text-center flex items-center justify-center gap-2">
           <span>DROP #1 /</span>

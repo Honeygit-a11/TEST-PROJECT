@@ -13,10 +13,9 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true },
     role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
     shippingAddress: {
-      street: String,
+      address: String,
       city: String,
-      state: String,
-      zip: String,
+      postalCode: String,
       country: String,
     },
   },
@@ -111,10 +110,9 @@ async function resetAndSeed() {
     name: 'Archive Director',
     role: 'admin',
     shippingAddress: {
-      street: '101 Brutalist Way, Penthouse Archive',
+      address: '101 Brutalist Way, Penthouse Archive',
       city: 'Berlin',
-      state: 'BE',
-      zip: '10115',
+      postalCode: '10115',
       country: 'Germany',
     },
   });
@@ -126,10 +124,9 @@ async function resetAndSeed() {
     name: 'Julian Vane',
     role: 'customer',
     shippingAddress: {
-      street: '404 Concrete Boulevard, Apt 4B',
+      address: '404 Concrete Boulevard, Apt 4B',
       city: 'London',
-      state: 'LDN',
-      zip: 'SE1 9SG',
+      postalCode: 'SE1 9SG',
       country: 'United Kingdom',
     },
   });

@@ -29,7 +29,20 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await UserModel.create({ name, email, passwordHash });
+    let user;
+    try {
+      user = await UserModel.create({ name, email, passwordHash });
+    } catch (error: any) {
+      // Handle the race between the findOne pre-check and create: a concurrent
+      // registration with the same email surfaces as a duplicate-key error.
+      if (error?.code === 11000) {
+        return NextResponse.json(
+          { error: { code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists' } },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     const token = await signToken({
       userId: String(user._id),

@@ -18,23 +18,31 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     const productId = params.id;
     await dbConnect();
 
-    const reviews = await ReviewModel.find({ productId })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const [reviews, stats] = await Promise.all([
+      ReviewModel.find({ productId }).sort({ createdAt: -1 }).limit(50).lean(),
+      ReviewModel.aggregate([
+        { $match: { productId } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            ratingSum: { $sum: '$rating' },
+            dist: { $push: '$rating' },
+          },
+        },
+      ]),
+    ]);
 
-    const total = reviews.length;
+    // Stats are computed over ALL reviews, not just the 50 most recent shown.
+    const agg = stats[0];
+    const total = agg ? agg.total : 0;
     const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    let ratingSum = 0;
-
-    for (const r of reviews) {
-      ratingSum += r.rating;
-      if (distribution[r.rating] !== undefined) {
-        distribution[r.rating]++;
+    if (agg) {
+      for (const rating of agg.dist) {
+        if (distribution[rating] !== undefined) distribution[rating]++;
       }
     }
-
-    const averageRating = total > 0 ? Math.round((ratingSum / total) * 10) / 10 : 0;
+    const averageRating = total > 0 ? Math.round((agg.ratingSum / total) * 10) / 10 : 0;
 
     return NextResponse.json({
       reviews: reviews.map((r) => ({

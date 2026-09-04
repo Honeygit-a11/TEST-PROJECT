@@ -49,44 +49,56 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    if (order.status === 'cancelled') {
-      return NextResponse.json(
-        { error: { code: 'ALREADY_CANCELLED', message: 'Order has already been cancelled.' } },
-        { status: 400 }
-      );
-    }
+    // 1. Atomically transition status to cancelled (only pending/paid can cancel).
+    // The conditional update ensures a concurrent request cannot double-cancel:
+    // only the first request that flips the status proceeds to restore stock.
+    const cancelled = await OrderModel.findOneAndUpdate(
+      { _id: order._id, status: { $in: ['pending', 'paid'] } },
+      { $set: { status: 'cancelled' } },
+      { new: true }
+    );
 
-    // Can only cancel if still in pending or paid status
-    if (order.status !== 'pending' && order.status !== 'paid') {
+    if (!cancelled) {
+      const current = await OrderModel.findById(order._id);
+      if (current?.status === 'cancelled') {
+        return NextResponse.json(
+          { error: { code: 'ALREADY_CANCELLED', message: 'Order has already been cancelled.' } },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         {
           error: {
             code: 'CANNOT_CANCEL_DISPATCHED_ORDER',
-            message: `Order status is "${order.status.toUpperCase()}". It has already been dispatched and cannot be cancelled.`,
+            message: `Order status is "${(current?.status || 'unknown').toUpperCase()}". It has already been dispatched and cannot be cancelled.`,
           },
         },
         { status: 422 }
       );
     }
 
-    // 1. Update order status
-    order.status = 'cancelled';
-    await order.save();
-
-    // 2. Atomically restore inventory stock for all products
-    for (const item of order.items) {
+    // 2. Atomically restore inventory stock for all products.
+    // inStock is derived from the post-increment stock, so a product that
+    // remains at 0 (sold out elsewhere concurrently) is not incorrectly
+    // marked as back in stock.
+    for (const item of cancelled.items) {
       if (item.productId) {
         await ProductModel.updateOne(
           { id: item.productId },
-          { $inc: { stock: item.quantity }, $set: { inStock: true } }
+          [
+            { $set: { stock: { $add: ['$stock', item.quantity] } } },
+            { $set: { inStock: { $gt: ['$stock', 0] } } },
+          ],
+          { updatePipeline: true }
         );
       }
     }
 
-    // 3. Roll back promo code redemption counter if applied
-    if (order.promoCode) {
+    // 3. Roll back promo code redemption counter if applied, guarding against
+    // decrementing below zero.
+    if (cancelled.promoCode) {
       await PromoCodeModel.updateOne(
-        { code: order.promoCode.toUpperCase() },
+        { code: cancelled.promoCode.toUpperCase(), usedCount: { $gt: 0 } },
         { $inc: { usedCount: -1 } }
       );
     }
@@ -95,7 +107,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       ok: true,
       message: 'Order cancelled successfully. Items have been restored to available inventory.',
       status: 'cancelled',
-      orderNumber: order.orderNumber,
+      orderNumber: cancelled.orderNumber,
     });
   } catch (error) {
     console.error('POST /api/orders/[id]/cancel error:', error);

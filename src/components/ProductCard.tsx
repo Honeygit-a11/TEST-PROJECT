@@ -122,7 +122,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="tracking-wider uppercase font-bold text-stone-900 flex items-center gap-1">
             {product.inStock ? (
               <>
-                <span className="inline-block w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>
+                <span
+                  className="inline-block w-1.5 h-1.5 bg-emerald-600"
+                  style={{ borderRadius: '50%' }}
+                ></span>
                 <span>IN STOCK</span>
               </>
             ) : (

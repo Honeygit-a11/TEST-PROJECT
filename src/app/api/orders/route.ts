@@ -160,11 +160,11 @@ export async function POST(req: NextRequest) {
       let promo = await PromoCodeModel.findOne({ code: normalized, active: true }).lean();
 
       // Fallback for static default archive promos if not yet seeded
-      if (!promo && (normalized === 'ARCHIVE10' || normalized === 'NEO2026')) {
+      if (!promo && (normalized === 'ARCHIVE10' || normalized === 'NEO20')) {
         promo = {
           code: normalized,
           discountType: 'percentage',
-          discountValue: 10,
+          discountValue: normalized === 'NEO20' ? 20 : 10,
           minSubtotal: 0,
           active: true,
           usedCount: 0,
@@ -202,18 +202,39 @@ export async function POST(req: NextRequest) {
     const total = Number((subtotal - discount + shipping).toFixed(2));
 
     const session = await getSession();
-    const order = await OrderModel.create({
-      orderNumber: generateOrderNumber(),
-      userEmail: session?.email,
-      customer,
-      items,
-      subtotal,
-      discount,
-      promoCode: appliedPromo,
-      shipping,
-      total,
-      status: 'pending',
-    });
+
+    const rollback = async () => {
+      for (const dec of decremented) {
+        await ProductModel.updateOne({ id: dec.productId }, { $inc: { stock: dec.quantity } });
+      }
+      if (appliedPromo) {
+        await PromoCodeModel.updateOne(
+          { code: appliedPromo, usedCount: { $gt: 0 } },
+          { $inc: { usedCount: -1 } }
+        );
+      }
+    };
+
+    let order;
+    try {
+      order = await OrderModel.create({
+        orderNumber: generateOrderNumber(),
+        userEmail: session?.email,
+        customer,
+        items,
+        subtotal,
+        discount,
+        promoCode: appliedPromo,
+        shipping,
+        total,
+        status: 'pending',
+      });
+    } catch (error) {
+      // Creating the order failed after stock was already reserved; restore
+      // inventory and the promo counter so nothing leaks.
+      await rollback();
+      throw error;
+    }
 
     return NextResponse.json(
       {

@@ -18,16 +18,17 @@ export async function POST(req: NextRequest) {
     // Check DB for promo code
     let promo = await PromoCodeModel.findOne({ code: normalizedCode }).lean();
 
-    // Seed default archive promo codes if DB doesn't have them yet
-    if (!promo && (normalizedCode === 'ARCHIVE10' || normalizedCode === 'NEO2026')) {
-      const created = await PromoCodeModel.create({
+    // Fallback for official archive promos when the DB hasn't been seeded yet.
+    // Validation is read-only: resolve in-memory rather than persisting a row.
+    if (!promo && (normalizedCode === 'ARCHIVE10' || normalizedCode === 'NEO20')) {
+      promo = {
         code: normalizedCode,
         discountType: 'percentage',
-        discountValue: 10,
+        discountValue: normalizedCode === 'NEO20' ? 20 : 10,
         minSubtotal: 0,
         active: true,
-      });
-      promo = created.toObject();
+        usedCount: 0,
+      } as any;
     }
 
     if (!promo) {

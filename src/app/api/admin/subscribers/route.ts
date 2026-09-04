@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
 
     const filter: any = {};
     if (query) {
-      filter.email = { $regex: query.trim(), $options: 'i' };
+      const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.email = { $regex: escaped, $options: 'i' };
     }
 
     const [subscribers, total, activeCount] = await Promise.all([

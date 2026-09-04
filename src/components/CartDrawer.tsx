@@ -115,7 +115,7 @@ export const CartDrawer: React.FC = () => {
                     </div>
 
                     <span className="font-headline text-lg text-[var(--brand-primary)]">
-                      ${item.product.price * item.quantity}
+                      ${(item.product.price * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -135,7 +135,7 @@ export const CartDrawer: React.FC = () => {
             <div className="flex justify-between items-baseline border-t border-[var(--brand-border)]/20 pt-2">
               <span className="font-headline text-xl">SUBTOTAL</span>
               <span className="font-headline text-2xl text-[var(--brand-primary)]">
-                ${subtotal}
+                ${subtotal.toFixed(2)}
               </span>
             </div>
 

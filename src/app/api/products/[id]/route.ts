@@ -51,6 +51,11 @@ export async function PATCH(
 
     const updateData = { ...validation.data };
 
+    // Keep the denormalized inStock flag in sync whenever stock is changed.
+    if (typeof updateData.stock === 'number') {
+      updateData.inStock = updateData.stock > 0;
+    }
+
     await dbConnect();
     const product = await ProductModel.findOneAndUpdate(
       { id: params.id },
